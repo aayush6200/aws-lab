@@ -1,0 +1,41 @@
+# ── NEVER commit credentials ──────────────────────────────────────────
+# AWS credentials / config
+.aws/
+aws-credentials*
+credentials
+*.pem
+*.key
+*_accessKeys.csv
+*accessKeys*.csv
+
+# env files (may hold AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
+.env
+.env.*
+*.env
+
+# Terraform state (contains secrets in plaintext) + local dirs
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+
+# CDK / SAM / Serverless build output
+cdk.out/
+.aws-sam/
+.serverless/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.python-version
+
+# Node
+node_modules/
+package-lock.json
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp
