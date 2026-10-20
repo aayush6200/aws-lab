@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Receipts API - upload tickets via presigned URLs
+Resources:
+  ReceiptLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: An execution role for a Lambda function launched by CloudFormation
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ticket-lambda-permissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 's3:PutObject'
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${ReceiptBucket}/*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
+  ReceiptBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  TicketLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Issues presigned upload URLs for receipts
+      Runtime: python3.12
+      Handler: index.get_presigned_url_handler  
+      Role: !GetAtt ReceiptLambdaRole.Arn
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ReceiptBucket
+      Code:
+        ZipFile: |
+          import boto3
+          import json, os, uuid
+
+          s3_client = boto3.client("s3")
+          BUCKET = os.environ["BUCKET_NAME"]
+
+          def get_presigned_url_handler(event, context):
+              body = json.loads(event.get("body") or "{}")
+              filename = body.get("filename", "receipt")
+              receipt_id = str(uuid.uuid4())
+              key = f"incoming/{receipt_id}/{filename}"
+              url = s3_client.generate_presigned_url(
+                  "put_object",
+                  Params={"Bucket": BUCKET, "Key": key},
+                  ExpiresIn=300,
+              )
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({"receipt_id": receipt_id, "upload_url": url}),
+              }
+Outputs:
+  BucketName:
+    Value: !Ref ReceiptBucket
+

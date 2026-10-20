@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 'AWS CloudFormation template that describes an AWS Lambda function, custom resource, S3 bucket, and S3 bucket policy to demonstrate multi-account Lambda-backed custom resources.'  
+Parameters: 
+  RoleNameString: 
+    Description:  Dev Access for buckets
+    Type: String
+    Default: DevAccess
+  RolePathString: 
+    Description: Provide a role path prefix
+    Type: String
+    Default: /aws-reserved/sso.amazonaws.com/
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: An execution role for a Lambda function launched by CloudFormation
+      ManagedPolicyArns:
+        - !Ref LambdaPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+  LambdaPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Managed policy for a Lambda function launched by CloudFormation
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'iam:GetRole'
+            Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*'
+          - Effect: Allow
+            Action:
+              - 'iam:ListRoles'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: !Join ['',['arn:', !Ref AWS::Partition, ':logs:', !Ref AWS::Region, ':', !Ref AWS::AccountId, ':log-group:/aws/lambda/', !Ref AWS::StackName, ':*']]
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+            Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
+  RoleInfo:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Looks up a Role ID based on CFN parameters
+      Handler: index.lambda_handler
+      FunctionName: !Ref AWS::StackName
+      MemorySize: 128
+      Runtime: python3.9
+      Role: !GetAtt 'LambdaRole.Arn'
+      Timeout: 240
+      Code:
+        ZipFile: |
+            import boto3
+            import cfnresponse
+            iam = boto3.client('iam')
+
+            def lambda_handler(event, context):
+              try:
+                rolematch = event['ResourceProperties']['RoleNameString']
+                rolepath = event['ResourceProperties']['RolePathString']
+
+                if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, "")
+
+                response = iam.list_roles(
+                  PathPrefix=rolepath
+                )
+                role = ''
+                for i in response['Roles']:
+                  if rolematch in i['RoleName']:
+                    role = i['RoleName']
+
+                response = iam.get_role(
+                  RoleName=role
+                )
+                
+                responseValue = response['Role']['RoleId']
+                responseData = {}
+                responseData['roleid'] = responseValue
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+              except:
+                cfnresponse.send(event, context, cfnresponse.FAILED, "")
+  GetRoleInfo:
+    Type: Custom::GetRoleInfo
+    Properties:
+      ServiceToken: !GetAtt RoleInfo.Arn
+      RoleNameString: !Ref RoleNameString
+      RolePathString: !Ref RolePathString
+  S3Bucket:
+      Type: 'AWS::S3::Bucket'
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+  S3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties: 
+        Bucket: !Ref S3Bucket
+        PolicyDocument: 
+          Version: 2012-10-17
+          Statement:
+            - Effect: Deny
+              Action: 's3:*'
+              Resource: 
+                - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucket}'
+                - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucket}/*'
+              Principal: '*'
+              Condition:
+                StringNotLike:
+                  'aws:userId':
+                    - !Join ['',[!GetAtt GetRoleInfo.roleid,':*']]
+                    - !Ref AWS::AccountId
+                         
+            - Effect: Allow
+              Action: 's3:*'
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucket}'
+                - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucket}/*'
+              Principal: '*'
+              Condition:
+                StringLike:
+                  'aws:userId': !Join ['', [!GetAtt GetRoleInfo.roleid, ':*']]

@@ -89,3 +89,37 @@ notes/     what I learned, per concept
 
 ## Daily log
 - 2026-10-14 — project created; cost-safety design locked; starting identity fundamentals.
+- 2026-10-15 — identity fundamentals covered (root user, IAM users/groups, least
+  privilege/blast radius, credentials, Organizations, Identity Center). Bootstrapped
+  programmatically: Organizations enabled + `lab-sandbox` account created
+  (`accounts/bootstrap_org.py`); IAM Identity Center enabled (Single-Region).
+  Notes written per concept in `notes/01..06`. Handles in `sso/config.local.json`.
+
+## BOOTSTRAP COMPLETE (2026-10-15)
+Keyless SSO access to the sandbox is working. Verified:
+`arn:aws:sts::685108782540:assumed-role/AWSReservedSSO_AdminAccess_…/aayush_admin`
+— a temporary assumed role, no root, no IAM user, no long-lived key.
+
+**To resume work (every session):**
+```
+aws sso login --profile aayush_admin          # refresh temp creds (re-run on ExpiredToken)
+aws sts get-caller-identity --profile aayush_admin   # confirm sandbox 685108782540
+```
+All lab commands run with `--profile aayush_admin`. Provisioning that creates
+IAM roles (Lambda exec roles etc.) needs this Admin profile; PowerUser/DevAccess
+can't create IAM roles.
+
+Profiles: `aayush_admin` (AdminAccess, build/provision) · a dev profile can be
+added for DevAccess (run-only). SSO start URL: see `sso_start_url` in
+`sso/config.local.json` (not committed).
+
+## Next (planned 5–6 hr session, two terminals)
+- **This terminal (AWS):** ~1 hr SSO fundamentals in depth, then WRITE programs
+  (user writes the functions, Claude guides):
+  - `sso/permission-sets/apply/` — create an `AdministratorAccess` permission set
+  - `sso/identity-store/` — create your Identity Center user
+  - `sso/assignments/` — assign you → permission set → sandbox (685108782540)
+  - then `aws configure sso` + `aws sso login` → keyless temp creds on the Mac
+  - verify: `aws sts get-caller-identity` shows an assumed-role, not root
+- **Other terminal (BGP):** resume `network-mastery` — continue scaling the
+  ibgp-01 lab (route reflectors / iBGP work).

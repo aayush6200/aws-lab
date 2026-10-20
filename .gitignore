@@ -13,6 +13,11 @@ credentials
 .env.*
 *.env
 
+# local config holding account IDs / instance handles
+# (NOT credentials — inert identifiers — but kept out of the public repo)
+config.local.json
+**/config.local.json
+
 # Terraform state (contains secrets in plaintext) + local dirs
 *.tfstate
 *.tfstate.*

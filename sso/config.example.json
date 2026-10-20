@@ -1,0 +1,11 @@
+{
+  "region": "us-east-1",
+  "org_id": "o-xxxxxxxxxx",
+  "management_account_id": "<12-digit management account id>",
+  "sandbox_account_id": "<12-digit sandbox account id>",
+  "instance_arn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxxxxxx",
+  "identity_store_id": "d-xxxxxxxxxx",
+  "sso_start_url": "https://d-xxxxxxxxxx.awsapps.com/start",
+  "management_root_email": "<root email of the management account>",
+  "sandbox_root_email": "<root email of the sandbox account>"
+}
